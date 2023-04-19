@@ -1,5 +1,3 @@
-
-
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -13,7 +11,6 @@
 using namespace std;
 #include <climits>
 #define PAGE 0x80
-using namespace std;
 
 const int width = 1000;
 const int height = 1000;
@@ -97,16 +94,36 @@ void draw_point(vector<uint8_t>& image, double x, double y, int radius, int* col
 	}
 }
 
-int main()
+int main(int argc, char *argv[])
 {
 #pragma region Read Input
 	//ReadInput
 	std::ifstream data;
 	string input = "DelayedFlights.csv";
-	data.open(input);
 	int labelled = 0;
 	int dimension = 0;
 	int samples = 0;
+	int clusters = 9;
+	int max_iter = 30;
+	int threads =16;
+	int gifDraw = 0;
+	if(argc!=7){
+		printf("Incorrect Parameters\n");
+		return -1;
+	}else{
+		input = argv[1];
+		sscanf(argv[2], "%d",&threads);
+		sscanf(argv[3], "%d",&labelled);
+		sscanf(argv[4], "%d",&clusters);
+		sscanf(argv[5], "%d",&max_iter);
+		sscanf(argv[6], "%d",&gifDraw);
+
+	}
+	
+	
+
+
+	data.open(input);
 	std::string delimiter = ",";
 	string output;
 	//First pass, read dimension and samples
@@ -185,7 +202,7 @@ int main()
 
 	//TODO: USE OPENMP
 #pragma region Loop
-	int clusters = 128;
+	// int clusters = 128;
 	int* colors = (int*)calloc(4*clusters, sizeof(int));
 	srand(time(NULL));
 	for (int j = 0; j < clusters; j++) {
@@ -202,7 +219,6 @@ int main()
 		srand(time(NULL));
 		for (int j = 0; j < clusters; j++) {
 			centers[j * dimension + i] = (double)rand()/RAND_MAX * (data_max[i] - data_min[i])/2 +data_min[i]+ (data_max[i] - data_min[i]) / 4;
-			//cout << centers[j * dimension + i] << endl;
 		}
 	}
 	double* ys = (double*)calloc(dimension * clusters, sizeof(double));
@@ -221,9 +237,7 @@ int main()
 	double z;
 	double tmp;
 	bool changed = false;
-	int max_iter = 30;
-	//The main loop
-	const int threads =16;
+	
 	
 	double loop_time = 0;
 	omp_set_num_threads(threads);
@@ -231,7 +245,7 @@ int main()
 	double tstart = omp_get_wtime();
 	int iter = 0;
 		for (; iter < max_iter; iter++) {
-				// changed = false;
+				changed = false;
 				recompute_inter_center(inter_center_dist, centers, clusters, dimension);
 				recompute_s(s, inter_center_dist, clusters);
 #pragma omp parallel for schedule(static,chunk_size)  private(z,r,tmp)
@@ -254,13 +268,15 @@ int main()
 								lowers[mat_ind_to_array(i, k, clusters)] = tmp;
 								if (tmp < uppers[i]) {
 									labels[i] = k;
-									//changed = true;
+									if(gifDraw==1){
+										changed = true;
+									}
+									
 									uppers[i] = tmp;
 								}
 							}
 						}
 					}
-//#pragma omp barrier
 				memcpy(centers_prev, centers, dimension* clusters * sizeof(double));
 				update_step(features, centers, ys, zs, labels, clusters, dimension, samples);
 
@@ -274,28 +290,23 @@ int main()
 					lowers[mat_ind_to_array(i, k, clusters)] -= delta[k];
 				}
 			}
+			if(gifDraw==1){
+				for (int i = 0; i < samples; i++) {
+					draw_point(canvas, (features[dimension * i + dim_visualize_x] - data_min[dim_visualize_x]) / (data_max[dim_visualize_x] - data_min[dim_visualize_x]), (features[dimension * i + dim_visualize_y] - data_min[dim_visualize_y]) / (data_max[dim_visualize_y] - data_min[dim_visualize_y]), point_radius, colors + labels[i] * 4);
+				}
+				GifWriteFrame(&g, canvas.data(), width, height, delay);
+				for (int i = 0; i < canvas.size(); i++) {
+					canvas[i] = 255;
+				}
+				if (!changed) {
+					break;
+				}
+
+			}
 			//printf("Time taken for the loop: % f\n", omp_get_wtime()-beforeloop);
-			//TODO: USE DIMENSION REDUCTION
-			//for (int i = 0; i < samples; i++) {
-			//	draw_point(canvas, (features[dimension * i + dim_visualize_x] - data_min[dim_visualize_x]) / (data_max[dim_visualize_x] - data_min[dim_visualize_x]), (features[dimension * i + dim_visualize_y] - data_min[dim_visualize_y]) / (data_max[dim_visualize_y] - data_min[dim_visualize_y]), point_radius, colors + labels[i] * 4);
-			//}
-			//GifWriteFrame(&g, canvas.data(), width, height, delay);
-			//for (int i = 0; i < canvas.size(); i++) {
-			//	canvas[i] = 255;
-			//}
-			//if (!changed) {
-			//	break;
-			//}
 	}
 	double ttaken = omp_get_wtime() - tstart;
 	printf("Time taken for %i iterations : % f\n", iter+1,ttaken);
-	//for (int i = 0; i < samples; i++) {
-	//	cout << labels[i];
-	//}
-	//cout << endl;
-	//for (int i = 0; i < 4 * clusters; i++) {
-	//	cout << colors[i] << endl;
-	//}
 	free(features);
 	free(data_max);
 	free(data_min);
