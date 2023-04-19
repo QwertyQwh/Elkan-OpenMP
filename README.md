@@ -7,7 +7,7 @@ This is a parallelized version of Elkan's algorithm, the program reads in a csv 
 To run the compiled program, type in 
 ```
 ./Elkan input_file.csv num_threads labelled num_clusters max_iteration should_draw
-
+```
 Parameters:
 
 input_file: input file path.
