@@ -5,7 +5,7 @@ This is a parallelized version of Elkan's algorithm, the program reads in a csv 
  Usage:
 -------------------
 To run the compiled program, type in 
-
+```
 ./Elkan input_file.csv num_threads labelled num_clusters max_iteration should_draw
 
 Parameters:
