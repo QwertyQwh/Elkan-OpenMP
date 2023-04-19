@@ -6,9 +6,13 @@
 #include <float.h>
 #include <vector>
 #include "gif.h"
+#include <cmath>
+#include <string.h>
 #include <omp.h>
-#define PAGE 0x80
 
+using namespace std;
+#include <climits>
+#define PAGE 0x80
 using namespace std;
 
 const int width = 1000;
@@ -98,9 +102,9 @@ int main()
 #pragma region Read Input
 	//ReadInput
 	std::ifstream data;
-	string input = "./data.csv";
+	string input = "DelayedFlights.csv";
 	data.open(input);
-	int labelled = 1;
+	int labelled = 0;
 	int dimension = 0;
 	int samples = 0;
 	std::string delimiter = ",";
@@ -181,7 +185,7 @@ int main()
 
 	//TODO: USE OPENMP
 #pragma region Loop
-	int clusters = 3;
+	int clusters = 128;
 	int* colors = (int*)calloc(4*clusters, sizeof(int));
 	srand(time(NULL));
 	for (int j = 0; j < clusters; j++) {
@@ -219,21 +223,21 @@ int main()
 	bool changed = false;
 	int max_iter = 30;
 	//The main loop
-	const int threads =4;
+	const int threads =16;
+	
 	double loop_time = 0;
 	omp_set_num_threads(threads);
-	int chunk_size = max(samples / threads+1,PAGE);
+	int chunk_size = max(samples / threads,PAGE);
 	double tstart = omp_get_wtime();
 	int iter = 0;
 		for (; iter < max_iter; iter++) {
-				changed = false;
+				// changed = false;
 				recompute_inter_center(inter_center_dist, centers, clusters, dimension);
 				recompute_s(s, inter_center_dist, clusters);
-				double beforeloop = omp_get_wtime();
 #pragma omp parallel for schedule(static,chunk_size)  private(z,r,tmp)
 					for (int i = 0; i < samples ; i++) {
-					//int tn = omp_get_thread_num();
-					//	printf("%i is working on iteration %i\n", tn, i);
+					// int tn = omp_get_thread_num();
+					// 	printf("%i is working on iteration %i\n", tn, i);
 						if (uppers[i] > s[labels[i]]) {
 							r = true;
 							for (int k = 0; k < clusters; k++) {
@@ -250,13 +254,13 @@ int main()
 								lowers[mat_ind_to_array(i, k, clusters)] = tmp;
 								if (tmp < uppers[i]) {
 									labels[i] = k;
-									changed = true;
+									//changed = true;
 									uppers[i] = tmp;
 								}
 							}
 						}
 					}
-					loop_time += omp_get_wtime() - beforeloop;
+//#pragma omp barrier
 				memcpy(centers_prev, centers, dimension* clusters * sizeof(double));
 				update_step(features, centers, ys, zs, labels, clusters, dimension, samples);
 
@@ -272,19 +276,18 @@ int main()
 			}
 			//printf("Time taken for the loop: % f\n", omp_get_wtime()-beforeloop);
 			//TODO: USE DIMENSION REDUCTION
-			for (int i = 0; i < samples; i++) {
-				draw_point(canvas, (features[dimension * i + dim_visualize_x] - data_min[dim_visualize_x]) / (data_max[dim_visualize_x] - data_min[dim_visualize_x]), (features[dimension * i + dim_visualize_y] - data_min[dim_visualize_y]) / (data_max[dim_visualize_y] - data_min[dim_visualize_y]), point_radius, colors + labels[i] * 4);
-			}
-			GifWriteFrame(&g, canvas.data(), width, height, delay);
-			for (int i = 0; i < canvas.size(); i++) {
-				canvas[i] = 255;
-			}
-			if (!changed) {
-				break;
-			}
+			//for (int i = 0; i < samples; i++) {
+			//	draw_point(canvas, (features[dimension * i + dim_visualize_x] - data_min[dim_visualize_x]) / (data_max[dim_visualize_x] - data_min[dim_visualize_x]), (features[dimension * i + dim_visualize_y] - data_min[dim_visualize_y]) / (data_max[dim_visualize_y] - data_min[dim_visualize_y]), point_radius, colors + labels[i] * 4);
+			//}
+			//GifWriteFrame(&g, canvas.data(), width, height, delay);
+			//for (int i = 0; i < canvas.size(); i++) {
+			//	canvas[i] = 255;
+			//}
+			//if (!changed) {
+			//	break;
+			//}
 	}
 	double ttaken = omp_get_wtime() - tstart;
-	printf("Time taken for the loop: % f\n", loop_time);
 	printf("Time taken for %i iterations : % f\n", iter+1,ttaken);
 	//for (int i = 0; i < samples; i++) {
 	//	cout << labels[i];
@@ -311,5 +314,3 @@ int main()
 	GifEnd(&g);
 	return 1;
 }
-
-
